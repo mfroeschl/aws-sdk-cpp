@@ -19,6 +19,7 @@
 
 #include <Windows.h>
 #include <winhttp.h>
+#include <versionhelpers.h>
 #include <sstream>
 #include <iostream>
 
@@ -54,6 +55,7 @@ WinHttpSyncHttpClient::WinHttpSyncHttpClient(const ClientConfiguration& config) 
         << " request timeout " << config.requestTimeoutMs << ",and connect timeout " << config.connectTimeoutMs);
 
     DWORD winhttpFlags = WINHTTP_ACCESS_TYPE_NO_PROXY;
+	
     const char* proxyHosts = nullptr;
     Aws::String strProxyHosts;
 
@@ -68,6 +70,26 @@ WinHttpSyncHttpClient::WinHttpSyncHttpClient(const ClientConfiguration& config) 
     }
 
     m_usingProxy = !config.proxyHost.empty();
+	
+	if (m_usingProxy)
+	{
+		AWS_LOGSTREAM_INFO(GetLogTag(), "Using a proxy. winhttpFlags = WINHTTP_ACCESS_TYPE_NAMED_PROXY");
+		winhttpFlags = WINHTTP_ACCESS_TYPE_NAMED_PROXY;
+	}
+	else
+	{
+		if (IsWindows8Point1OrGreater())
+		{
+        	AWS_LOGSTREAM_INFO(GetLogTag(), "Not using a proxy. Detected Windows 8.1 or greater. winhttpFlags = WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY");
+			winhttpFlags = WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY;
+		}
+		else
+		{
+			AWS_LOGSTREAM_INFO(GetLogTag(), "Not using a proxy. Detected Windows 8.0 or less. winhttpFlags = WINHTTP_ACCESS_TYPE_NO_PROXY");
+			winhttpFlags = WINHTTP_ACCESS_TYPE_NO_PROXY;
+		}
+	}
+	
     //setup initial proxy config.
 
     Aws::WString proxyString;
@@ -78,7 +100,6 @@ WinHttpSyncHttpClient::WinHttpSyncHttpClient(const ClientConfiguration& config) 
         AWS_LOGSTREAM_INFO(GetLogTag(), "Http Client is using a proxy. Setting up proxy with settings scheme " << proxySchemeString
              << ", host " << config.proxyHost << ", port " << config.proxyPort << ", username " << config.proxyUserName);
 
-        winhttpFlags = WINHTTP_ACCESS_TYPE_NAMED_PROXY;
         Aws::StringStream ss;
         const char* schemeString = Aws::Http::SchemeMapper::ToString(config.scheme);
         ss << StringUtils::ToUpper(schemeString) << "=" << proxySchemeString << "://" << config.proxyHost << ":" << config.proxyPort;
